@@ -328,7 +328,7 @@
             };
         }
         
-        // 6. Processing Algorithm (Ultra-Fast Greedy Local Consumer)
+        // 6. Processing Algorithm (Smart Context & Boundary Protection)
         function processTranscript(finalText, interimText) {
             let finalWords = finalText.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(w => w.length > 0);
             let interimWords = interimText.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(w => w.length > 0);
@@ -336,18 +336,15 @@
             let spokenWords = finalWords.concat(interimWords);
             if (spokenWords.length === 0) return;
             
-            // MIKROSKOPISCHER PUFFER: Wir nehmen nur die allerletzten 3 Wörter!
-            // Das sorgt dafür, dass er "abgehackt" und extrem echtzeitnah reagiert.
-            let recentSpoken = spokenWords.slice(-3);
+            // Groesserer Puffer fuer besseren Kontext (5 Woerter statt 3)
+            let recentSpoken = spokenWords.slice(-5);
             
-            // TUNNELBLICK: Wir schauen nur 8 Wörter (ca. ein halber Satz) nach vorne.
-            // Dadurch wird es mathematisch unmöglich, dass er versehentlich in die nächste Folie springt.
+            // Tunnelblick bleibt bei 8 Woertern nach vorne
             const LOOKAHEAD = 8;
             let maxIndexToCheck = Math.min(currentWordIndex + LOOKAHEAD, allWords.length);
             
             let advanced = false;
             
-            // Wir vergleichen die 3 gesprochenen Wörter mit den 8 Wörtern im Tunnel
             for (let s = 0; s < recentSpoken.length; s++) {
                 let spokenWord = recentSpoken[s];
                 
@@ -355,19 +352,37 @@
                     let targetWord = allWords[i].clean;
                     if (!targetWord) continue;
                     
-                    // Prefix Match für super schnelle Reaktion, noch bevor Google das Wort fertig hat!
-                    // z.B. "finan" matcht "financial"
                     let isPrefixMatch = targetWord.length >= 5 && targetWord.startsWith(spokenWord) && spokenWord.length >= 3;
                     
-                    // AGGRESSIVER SPRUNG: Wenn das Wort passt, springen wir SOFORT! Keine Sequenz-Prüfung mehr.
                     if (isFuzzyMatch(spokenWord, targetWord) || isPrefixMatch) {
+                        // --- NEUE SICHERHEITSREGEL: Foliengrenzen-Schutz ---
+                        let currentSlideIdx = allWords[currentWordIndex] ? allWords[currentWordIndex].slide_idx : 0;
+                        let targetSlideIdx = allWords[i].slide_idx;
+                        
+                        if (targetSlideIdx > currentSlideIdx) {
+                            // Wenn wir auf eine NEUE Folie springen wollen, pruefen wir, das wievielte Wort das ist
+                            let wordOffsetInNewSlide = 0;
+                            for(let j = i; j >= 0; j--) {
+                                if(allWords[j].slide_idx === targetSlideIdx) {
+                                    wordOffsetInNewSlide++;
+                                } else {
+                                    break;
+                                }
+                            }
+                            // Erlaube den Folien-Sprung NUR, wenn das erkannte Wort zu den ersten 4 Woertern der neuen Folie gehoert!
+                            // Verhindert Ueberspringen in die Mitte der naechsten Folie bei Wortwiederholungen.
+                            if (wordOffsetInNewSlide > 4) {
+                                continue; // Blockiere diesen Match und suche weiter
+                            }
+                        }
+                        
+                        // Sprung ist sicher
                         currentWordIndex = i + 1;
                         advanced = true;
                         
-                        // Tunnelblick wird sofort relativ zum neuen Index aktualisiert, 
-                        // damit wir im selben Event noch weiter springen können!
+                        // Tunnelblick relativ zum neuen Index aktualisieren
                         maxIndexToCheck = Math.min(currentWordIndex + LOOKAHEAD, allWords.length);
-                        break; // Das aktuelle gesprochene Wort ist verbraucht, weiter zum nächsten!
+                        break; // Gesprochenes Wort verbraucht, weiter zum naechsten
                     }
                 }
             }
