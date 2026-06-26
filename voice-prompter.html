@@ -2,6 +2,18 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+        const PASSWORD = "Antonius";
+        if (sessionStorage.getItem("authenticated") !== "true") {
+            let input = prompt("Bitte Passwort eingeben, um Zugang zu erhalten:");
+            if (input === PASSWORD) {
+                sessionStorage.setItem("authenticated", "true");
+            } else {
+                document.documentElement.innerHTML = "<body style='background:#0f172a; color:white; display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif;'><h1>Zugriff verweigert. Falsches Passwort.</h1></body>";
+                throw new Error("Access Denied");
+            }
+        }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Voice Prompter</title>
